@@ -6,7 +6,8 @@ using namespace zbar;
 
 Cam::Cam()
 {
-	PIC_DISP = true;
+	PIC_DISP_ON = true;
+	PRINT_ON = true;
 }
 
 
@@ -161,14 +162,12 @@ bool Cam::GetImage(Mat &img)
 		}
 
 
-		//Mat img1;
-		//cv::pyrDown(img, img1);
-		//cv::pyrDown(img1, img1);
-		//cv::pyrDown(img1, img1);
-
-		//cv::rotate(img1, img1, cv::ROTATE_90_CLOCKWISE);
-		//ShowPic("采集的图像", img1);
-		//if (cv::waitKey() == 's');// break;
+		//	针对托盘区域裁剪图像
+		ShowPic("采集的图像", img);
+		
+		Rect r = Rect(0, 0, img.cols, img.rows);
+		img = img(r);
+		ShowPic("采集的图像", img);
 
 	}
 
@@ -274,59 +273,74 @@ bool Cam::PicPreProcess(const Mat & img, vector<Mat>& res)
 	return true;
 }
 
-bool Cam::GetCenters(const Mat & bin_img, vector<Point>& centers)
-{
-	try
-	{
+//bool Cam::GetCenters(const Mat & bin_img, vector<Point>& centers)
+//{
+//	try
+//	{
+//
+//		Mat img;
+//		cvtColor(bin_img, img, cv::COLOR_GRAY2BGR);
+//
+//		vector<vector<Point>> contours;
+//		findContours(bin_img, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+//		drawContours(img, contours, -1, Scalar(0, 0, 255), 2);
+//
+//		// 绘制形心
+//		for (auto it : contours) 
+//		{
+//			//计算所有的力矩
+//			Moments mom = cv::moments(cv::Mat(it));
+//			//绘制质心
+//			Point center = Point(mom.m10 / mom.m00, mom.m01 / mom.m00);
+//
+//			//	将形心压入输出数组
+//			centers.push_back(center);
+//
+//			cout << center << endl;
+//			circle(img, center, 2, cv::Scalar(0,255,0), 3);
+//		}
+//	
+//		string winName = "contours";
+//		ShowPic(winName, img);
+//		moveWindow(winName, 200, 200);
+//
+//		return true;
+//	}
+//	catch (...)
+//	{
+//		cout << "获取形心失败！" << endl;
+//		return false;
+//	}
+//}
 
-		Mat img;
-		cvtColor(bin_img, img, cv::COLOR_GRAY2BGR);
-
-		vector<vector<Point>> contours;
-		findContours(bin_img, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
-		drawContours(img, contours, -1, Scalar(0, 0, 255), 2);
-
-		// 绘制形心
-		for (auto it : contours) 
-		{
-			//计算所有的力矩
-			Moments mom = cv::moments(cv::Mat(it));
-			//绘制质心
-			Point center = Point(mom.m10 / mom.m00, mom.m01 / mom.m00);
-
-			//	将形心压入输出数组
-			centers.push_back(center);
-
-			cout << center << endl;
-			circle(img, center, 2, cv::Scalar(0,255,0), 3);
-		}
-	
-		string winName = "contours";
-		ShowPic(winName, img);
-		moveWindow(winName, 200, 200);
-
-		return true;
-	}
-	catch (...)
-	{
-		cout << "获取形心失败！" << endl;
-		return false;
-	}
-}
-
-bool Cam::TransCordinate(const vector<Point> centers, vector<Point>& dst)
+bool Cam::TransCordinate(const vector<Point> &centers, vector<Point2d>& dst)
 {
 	dst.clear();
 	for (Point p : centers)
 	{
-		// 将像素位置映射到世界坐标系
-		//	需要 内参矩阵 和 外参矩阵
 
+		Point2d after;
+		if(TransCordinate(p, after)) dst.push_back(after);
+		else
+		{
+			Println("像素点坐标超出范围！");
+		}
 
-		//	世界坐标系到机器人坐标系，需要讨论确定世界坐标系放哪里
+		//	径向畸变
+		//	[k1, k2] = [-0.1016, 0.0818]
+		//	x' = x(1 + k1*r^2 + k2*r^4)
+
 	}
 
 	return false;
+}
+
+bool Cam::TransCordinate(const Point &p, Point2d & dst)
+{
+	if (p.x < 0 || p.x > CAM_WIDTH || p.y < 0 || p.y > CAM_HEIGHT) return false;
+	dst.x = (p.x - u0) / fx;
+	dst.y = (p.y - v0) / fy;
+	return true;
 }
 
 bool Cam::GetCodes(const Mat & img, vector<string>& barcodes, map<string, Point>& pos)
@@ -336,17 +350,19 @@ bool Cam::GetCodes(const Mat & img, vector<string>& barcodes, map<string, Point>
 	Mat bin_img;
 	GetBinImg(img, bin_img);
 
-	//	为提取准确位置，不能对原图采用膨胀腐蚀的操作
-	int k_size = 30;
+	//	膨胀腐蚀后，获取ROI
+	int k_size = 20;
 	Mat kernel = getStructuringElement(MORPH_RECT, Size(k_size, k_size));
 
 	//	要提取的部分为黑色，（白色部分）膨胀2次， 腐蚀3次
-	dilate(bin_img, bin_img, kernel);
-	dilate(bin_img, bin_img, kernel);
-	erode(bin_img, bin_img, kernel);
-	erode(bin_img, bin_img, kernel);
-	erode(bin_img, bin_img, kernel);
-	ShowPic("膨胀*2后腐蚀*3", bin_img);
+	int k = 2;
+	int kk = k;
+	while(kk--) dilate(bin_img, bin_img, kernel);
+	
+	kk = k + 1;
+	while(kk--) erode(bin_img, bin_img, kernel);
+
+	//ShowPic("膨胀*" + to_string(k) + "后腐蚀*" + to_string(k + 1), bin_img);
 
 	
 
@@ -361,10 +377,9 @@ bool Cam::GetCodes(const Mat & img, vector<string>& barcodes, map<string, Point>
 	Mat img1;
 	cvtColor(bin_img, img1, cv::COLOR_GRAY2BGR);
 
-
 	drawContours(img1, contours, -1, Scalar(0, 0, 255), 2);
 
-	ShowPic("contours", img1);
+	ShowPic("contours", img1, 1000);
 
 
 	//	条码 --- 中心位置 对应
@@ -381,56 +396,28 @@ bool Cam::GetCodes(const Mat & img, vector<string>& barcodes, map<string, Point>
 		vector<Point> centers;
 
 		Mat img_roi = img(rect);
-		ShowPic("img_roi", img_roi);
+		ShowPic("img_roi", img_roi, 200);
 
 
 		string code;
 		if (ReadBar(img_roi, code))
 		{
+			Point cen;
+			GetCenter(img_roi, cen);
 			code2pos[code] = center;
 			cout << "条码位置：" << center << endl;
 
-			//	存在单个条码的区域，接下来需要用用直线拟合边缘
+			//	存在单个条码的区域，接下来精细提取轮廓
 			code_contours.push_back(contour);
-
-			//	用于计算条码的相对位置
-			//centers.push_back(center);
-
-			//	判断 同一行、列 的变量
-			//bias_wid = bias_wid > img_roi.cols ? img_roi.cols : bias_wid;
-			//bias_hei = bias_hei > img_roi.rows ? img_roi.rows : bias_hei;
-			
+			 
 		}
 	}
-
-	LineCrop(img, code_contours);
 
 	if (barcodes.size() == 0) return false;
 
 	std::sort(barcodes.begin(), barcodes.end());
 
-	//	计算条码的相对位置
-	//	相机视野的 宽度 方向已经对齐了 托盘边缘
-	//	相差 bias 像素以内，认为在同一行/列
-	/*int bias = 100;
-
-	vector<int> rows, cols;
-	rows.push_back(code2pos[barcodes[0]].x);
-	cols.push_back(code2pos[barcodes[0]].y);
-
-	for (int i = 0; i < barcodes.size() - 1; i++)
-	{
-		for (int j = i + 1; j < barcodes.size(); j++)
-		{
-			for (int m = 0; m < rows.size(); m++)
-			{
-				if()
-			}
-		}
-	}
-*/
-
-
+	
 	return true;
 }
 
@@ -468,7 +455,7 @@ bool Cam::GetBinImg(const Mat & img, Mat & bin_img)
 	//	先跳过滤波处理
 	img_gauss = img_gray;
 
-	ShowPic("灰度图", img_gray);
+	ShowPic("灰度图", img_gray, 1000);
 
 
 	//	阈值分割
@@ -477,7 +464,7 @@ bool Cam::GetBinImg(const Mat & img, Mat & bin_img)
 
 	bin_img = img_bin;
 
-	ShowPic("二值图", img_bin);
+	//ShowPic("二值图", img_bin);
 
 	return true;
 }
@@ -498,6 +485,7 @@ bool Cam::ReadBar(const Mat & img_roi, string & code)
 	{
 		img_gray = img_roi;
 	}
+	Mat img_bin = img_gray;
 
 	int width = img_gray.cols;
 	int height = img_gray.rows;
@@ -543,6 +531,22 @@ bool Cam::ReadBar(const Mat & img_roi, string & code)
 
 }
 
+void Cam::GetCenter(const Mat & img_roi, Point & pos)
+{
+	Mat img_bin;
+
+
+	Mat img_hist;
+	cvtColor(img_roi, img_hist, cv::COLOR_BGR2GRAY);
+
+	equalizeHist(img_hist, img_hist);
+
+	threshold(img_hist, img_bin, 50, 255, THRESH_BINARY_INV);
+	ShowPic("roi_with_single_code", img_bin);
+
+
+}
+
 bool Cam::LineCrop(const Mat & img, const vector<vector<Point>>& contours)
 {
 	Mat img1;
@@ -551,7 +555,6 @@ bool Cam::LineCrop(const Mat & img, const vector<vector<Point>>& contours)
 		img1.create(img.size(), CV_8UC1);
 		drawContours(img1, contours, i, Scalar(255, 255, 255), 2);
 		ShowPic("contour", img1);
-		waitKey();
 
 		vector<Vec4i> lines;
 		
@@ -563,7 +566,7 @@ bool Cam::LineCrop(const Mat & img, const vector<vector<Point>>& contours)
 		}
 		catch (...)
 		{
-			cout << "转换深度出错" << endl;
+			Println("深度转换出错！");
 		}
 		for (auto l : lines)
 		{
@@ -571,18 +574,20 @@ bool Cam::LineCrop(const Mat & img, const vector<vector<Point>>& contours)
 		}
 
 		ShowPic("lines", img1);
-		waitKey();
+
+		//	边角延长相交
+
 	}
 	return false;
 }
 
 bool Cam::ShowPic(string winName, const Mat & img, const int &time)
 {
-	if (!PIC_DISP) return false;
+	if (!PIC_DISP_ON) return false;
 	try 
 	{
 		Mat tmp = img;
-		while (tmp.rows > 1500 || tmp.cols > 1500)
+		while (tmp.rows > 1000 || tmp.cols > 1000)
 			pyrDown(tmp, tmp);
 		imshow(winName, tmp);
 		waitKey(time);
@@ -592,4 +597,9 @@ bool Cam::ShowPic(string winName, const Mat & img, const int &time)
 		return false;
 	}
 	return true;
+}
+
+void Cam::Println(string str)
+{
+	if(PRINT_ON) cout << str << endl;
 }
