@@ -38,13 +38,16 @@ private:
 
 
 	//	获取二值图像，主要参数：预处理卷积核大小，二值化阈值
-	bool GetBinImg(const Mat &img, Mat &bin_img);
+	bool GetBinImg(const Mat &img, Mat &bin_img, const int &thresh = DEFAULT_THRESH);
 
+	void GetContours(const Mat &bin_img, vector<vector<Point>> &contours);
+	void ShowContours(const Mat &img, vector<vector<Point>> &contours, const string &str = "contours", const Scalar &color = Scalar(0, 0, 255));
+	void ShowContours(const Mat &img, vector<Point> &contour, const string &str = "contour", const Scalar &color = Scalar(0, 0, 255));
 	//	采用zbar识别图像中的条码
 	bool ReadBar(const Mat &img_roi, string &code);
 
 	//	针对已经识别到单一条码的ROI提取出零件中心
-	void GetCenter(const Mat &img_roi, Point &pos);
+	void GetCenter(const Mat &img_roi, Point &pos, const int &thresh = DEFAULT_THRESH);
 
 	// 边缘直线拟合，主要参数 HoughLinesP 的几个参数需要调节
 	bool LineCrop(const Mat &img, const vector<vector<Point>> &contours);
@@ -56,6 +59,8 @@ private:
 	//	打印行
 	void Println(string str);
 
+	template <class T>
+	void Println(string str, const T t);
 
 
 	/*		相机硬件相关参数		*/		
@@ -81,15 +86,28 @@ private:
 
 	//	内参矩阵 K，左乘像素坐标后得到归一化坐标
 	/*
-	3524.2	0		2801.7
-	0		3523.8	1803.3
-	0		0		1
+	3551.024	0			0
+	0			3550.081	0
+	2796.942	1807.466	1
 	*/
 
 	// 由于相机可以调焦，fx和fy需要现场再次标定
-	const double fx = 3524.2;	// 像素描述的焦距长度
-	const double fy = 3523.8;
-	const double u0 = 2801.7;	// 像素描述的主点位置
-	const double v0 = 1803.3;
+	//const double fx = 3524.2;	// 像素描述的焦距长度
+	//const double fy = 3523.8;
+	//const double u0 = 2801.7;	// 像素描述的主点位置
+	//const double v0 = 1803.3;
+
+
+	//	20191007 标定结果
+	const double fx = 3616.2;	// 像素描述的焦距长度
+	const double fy = 3616.4;
+	const double u0 = 2795.6;	// 像素描述的主点位置
+	const double v0 = 1809.3;
+
+	//	畸变系数：-0.104350685299087	0.0848315771350100
+
+
+	//	默认阈值分割数值
+	const static int DEFAULT_THRESH = 120;
 };
 
