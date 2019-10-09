@@ -47,7 +47,7 @@ private:
 	bool ReadBar(const Mat &img_roi, string &code);
 
 	//	针对已经识别到单一条码的ROI提取出零件中心
-	void GetCenter(const Mat &img_roi, Point &pos, const int &thresh = DEFAULT_THRESH);
+	void GetCenter(const Mat &img_roi, Point &pos, vector<Point> &accu_contour, const int &thresh = DEFAULT_THRESH);
 
 	// 边缘直线拟合，主要参数 HoughLinesP 的几个参数需要调节
 	bool LineCrop(const Mat &img, const vector<vector<Point>> &contours);
@@ -108,6 +108,9 @@ private:
 
 
 	//	默认阈值分割数值
-	const static int DEFAULT_THRESH = 120;
+	const static int DEFAULT_THRESH = 35;
+
+	//	轮廓最小包含点个数
+	const static int MIN_POINT = 10;
 };
 

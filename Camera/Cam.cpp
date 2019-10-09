@@ -360,7 +360,7 @@ bool Cam::GetCodes(const Mat & img, vector<string>& barcodes, map<string, Point>
 	int kk = k;
 	while(kk--) dilate(bin_img, bin_img, kernel);
 	
-	kk = k + 1;
+	kk = k + 3;
 	while(kk--) erode(bin_img, bin_img, kernel);
 
 
@@ -386,7 +386,7 @@ bool Cam::GetCodes(const Mat & img, vector<string>& barcodes, map<string, Point>
 	for (auto contour : contours)
 	{
 		//	工装的特殊形状，最完美的轮廓都需要12个点
-		if (contour.size() < 12) continue;
+		if (contour.size() < MIN_POINT) continue;
 
 
 		Rect rect = boundingRect(contour);
@@ -402,15 +402,21 @@ bool Cam::GetCodes(const Mat & img, vector<string>& barcodes, map<string, Point>
 			ShowPic("此ROI中存在条码", img_roi, 500);
 
 			Point cen;
-			GetCenter(img_roi, cen);
+			vector<Point> accu_contour;
+			GetCenter(img_roi, cen, accu_contour);
 			
+			for (Point &p : accu_contour)
+			{
+				p.x += rect.x;
+				p.y += rect.y;
+			}
 			//	cen坐标为ROI中的坐标，需要计算整个图像上的绝对坐标
 			cen.x += rect.x;
 			cen.y += rect.y;
 
 			//	将中心点在图上画出
-			circle(cen_img, cen, 12, Scalar(0, 0, 255), -1);
-			ShowContours(cen_img, contour, "找到条码中心点");
+			circle(cen_img, cen, 24, Scalar(0, 0, 255), -1);
+			ShowContours(cen_img, accu_contour, "找到条码中心点");
 
 			code2pos[code] = cen;
 
@@ -485,19 +491,27 @@ void Cam::GetContours(const Mat & bin_img, vector<vector<Point>>& contours)
 void Cam::ShowContours(const Mat & img, vector<vector<Point>>& contours, const string &str, const Scalar &color)
 {
 	//	绘制轮廓
-	Mat img1;
-	cvtColor(img, img1, cv::COLOR_GRAY2BGR);
+	Mat img1 = img;
+	try
+	{
+		cvtColor(img1, img1, cv::COLOR_GRAY2BGR);
+	}
+	catch (...)
+	{
+		;
+	}
 
 	drawContours(img1, contours, -1, color, 2);
 
-	ShowPic(str, img1, 800);
+	ShowPic(str, img1, 1000);
 }
 
 void Cam::ShowContours(const Mat & img, vector<Point>& contour, const string &str, const Scalar &color)
 {
 	//	绘制轮廓
-	Mat img1 = img;
-
+	Mat img1;
+	img.copyTo(img1);
+	img1 = img;
 	try 
 	{
 		cvtColor(img1, img1, cv::COLOR_GRAY2BGR);
@@ -510,7 +524,7 @@ void Cam::ShowContours(const Mat & img, vector<Point>& contour, const string &st
 	contours.push_back(contour);
 	drawContours(img1, contours, -1, color, 8);
 
-	ShowPic(str, img1);
+	ShowPic(str, img1, 800);
 }
 
 bool Cam::ReadBar(const Mat & img_roi, string & code)
@@ -579,7 +593,7 @@ bool Cam::ReadBar(const Mat & img_roi, string & code)
 
 }
 
-void Cam::GetCenter(const Mat & img_roi, Point & pos, const int &thresh)
+void Cam::GetCenter(const Mat & img_roi, Point & pos, vector<Point> &accu_contour, const int &thresh)
 {
 	Mat bin_img;
 	cvtColor(img_roi, bin_img, cv::COLOR_BGR2GRAY);
@@ -591,12 +605,12 @@ void Cam::GetCenter(const Mat & img_roi, Point & pos, const int &thresh)
 	vector<vector<Point>> contours;
 	GetContours(bin_img, contours);
 	
-
 	//	针对每个轮廓，提取矩形区域，并识别条码
+	int i = 0;
 	for (auto contour : contours)
 	{
-
-		if (contour.size() < 12) continue;
+		i++;
+		if (contour.size() < MIN_POINT) continue;
 
 		Rect rect = boundingRect(contour);
 		Mat roi = img_roi(rect);
@@ -608,19 +622,19 @@ void Cam::GetCenter(const Mat & img_roi, Point & pos, const int &thresh)
 		string code;
 		if (ReadBar(roi, code))
 		{
-
 			//计算所有的力矩
 			Moments mom = cv::moments(cv::Mat(contour));
 			//绘制质心
 			pos = Point(mom.m10 / mom.m00, mom.m01 / mom.m00);
 
-			circle(roi, pos, 12, Scalar(0, 0, 255), -1);
-			ShowContours(roi, contour, "找到条码的精细轮廓");
+			circle(img_roi, pos, 12, Scalar(0, 255, 255), -1);
+			ShowContours(img_roi, contour, "找到条码的精细轮廓", Scalar(0, 255, 255));
 			
 			//	pos坐标为ROI中的坐标，需要计算整个图像上的绝对坐标
 			pos.x += rect.x;
 			pos.y += rect.y;
 		
+			accu_contour = contour;
 			return;
 
 			//Mat img = img_roi;
