@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "Cam.h"
 
+
 using namespace zbar;
 
 

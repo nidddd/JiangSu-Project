@@ -2,8 +2,12 @@
 
 #include "GalaxyIncludes.h"
 #include <opencv2/opencv.hpp>
+#include <string>
+#include <vector>
+#include <zbar.h>
 
 using namespace cv;
+using namespace std;
 
 class Cam
 {
