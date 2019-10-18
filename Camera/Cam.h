@@ -48,13 +48,14 @@ private:
 
 	//	针对已经识别到单一条码的ROI提取出零件中心
 	void GetCenter(const Mat &img_roi, Point &pos, vector<Point> &accu_contour, const int &thresh = DEFAULT_THRESH);
+	void GetDir(const Mat &img_roi, const vector<Point> &contour, float &dir);
 
 	// 边缘直线拟合，主要参数 HoughLinesP 的几个参数需要调节
 	bool LineCrop(const Mat &img, const vector<vector<Point>> &contours);
 
 	//	显示图像函数
 	//	time 为 waitKey(time);
-	bool ShowPic(string winName, const Mat &img, const int &time = 0);
+	bool ShowPic(string winName, const Mat &img, const int &time = 0, const bool &close = false);
 
 	//	打印行
 	void Println(string str);
@@ -81,8 +82,8 @@ private:
 	bool PIC_DISP_ON;	// false时关闭ShowPic()函数显示图像
 	bool PRINT_ON;
 	//	图像宽高
-	const int CAM_WIDTH = 5496;
-	const int CAM_HEIGHT = 3672;
+	const static int CAM_WIDTH = 5496;
+	const static int CAM_HEIGHT = 3672;
 
 	//	内参矩阵 K，左乘像素坐标后得到归一化坐标
 	/*
@@ -108,9 +109,15 @@ private:
 
 
 	//	默认阈值分割数值
-	const static int DEFAULT_THRESH = 35;
+	const static int DEFAULT_THRESH = 60;
 
 	//	轮廓最小包含点个数
 	const static int MIN_POINT = 10;
+
+	// 由于拍摄位置固定，可以预选ROI
+	const static int rawx = 0;
+	const static int rawy = 0;
+	const static int raw_width = CAM_WIDTH - rawx - 00;
+	const static int raw_height = CAM_HEIGHT - rawy - 000;
 };
 

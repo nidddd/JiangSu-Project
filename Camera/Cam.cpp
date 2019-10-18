@@ -345,10 +345,17 @@ bool Cam::TransCordinate(const Point &p, Point2d & dst)
 
 bool Cam::GetCodes(const Mat & img, vector<string>& barcodes, map<string, Point>& pos)
 {
+
+	Rect raw_roi = Rect(rawx, rawy, raw_width, raw_height);
+	Mat raw_roi_img = img(raw_roi);
+
+	//ShowPic("raw_roi_img", raw_roi_img, 1000, true);
+	
+
 	//	将图像二值化，二值化后
 	//	原本 深色 的部分（如条码）将被设为 白色
 	Mat bin_img;
-	GetBinImg(img, bin_img);
+	GetBinImg(raw_roi_img, bin_img);
 
 	//	膨胀腐蚀后，获取ROI
 	int k_size = 20;
@@ -391,7 +398,7 @@ bool Cam::GetCodes(const Mat & img, vector<string>& barcodes, map<string, Point>
 
 		Rect rect = boundingRect(contour);
 
-		Mat img_roi = img(rect);
+		Mat img_roi = raw_roi_img(rect);
 		
 
 		//	扫描ROI中是否有单个条码
@@ -405,19 +412,21 @@ bool Cam::GetCodes(const Mat & img, vector<string>& barcodes, map<string, Point>
 			vector<Point> accu_contour;
 			GetCenter(img_roi, cen, accu_contour);
 			
+			//	计算精细轮廓在上一层ROI中的位置
 			for (Point &p : accu_contour)
 			{
-				p.x += rect.x;
-				p.y += rect.y;
+				p.x += rect.x + rawx;
+				p.y += rect.y + rawy;
 			}
 			//	cen坐标为ROI中的坐标，需要计算整个图像上的绝对坐标
-			cen.x += rect.x;
-			cen.y += rect.y;
+			cen.x += rect.x + rawx;
+			cen.y += rect.y + rawy;
 
 			//	将中心点在图上画出
 			circle(cen_img, cen, 24, Scalar(0, 0, 255), -1);
 			ShowContours(cen_img, accu_contour, "找到条码中心点");
-
+			string fp = "C:/Users/Copper/Desktop/江苏项目图像部分/实拍/";
+			imwrite(fp+"中心点.jpg", cen_img);
 			code2pos[code] = cen;
 
 			Println("\n");
@@ -434,7 +443,7 @@ bool Cam::GetCodes(const Mat & img, vector<string>& barcodes, map<string, Point>
 
 	std::sort(barcodes.begin(), barcodes.end());
 
-	
+	ShowPic("img", img);
 	return true;
 }
 
@@ -467,7 +476,7 @@ bool Cam::GetBinImg(const Mat & img, Mat & bin_img, const int &thresh)
 	//	先跳过滤波处理
 	img_gauss = img_gray;
 
-	ShowPic("灰度图", img_gray, 1000);
+	ShowPic("灰度图", img_gray, 1000, true);
 
 
 	//	阈值分割
@@ -503,7 +512,7 @@ void Cam::ShowContours(const Mat & img, vector<vector<Point>>& contours, const s
 
 	drawContours(img1, contours, -1, color, 2);
 
-	ShowPic(str, img1, 1000);
+	ShowPic(str, img1, 1000, true);
 }
 
 void Cam::ShowContours(const Mat & img, vector<Point>& contour, const string &str, const Scalar &color)
@@ -511,7 +520,7 @@ void Cam::ShowContours(const Mat & img, vector<Point>& contour, const string &st
 	//	绘制轮廓
 	Mat img1;
 	img.copyTo(img1);
-	img1 = img;
+	//img1 = img;
 	try 
 	{
 		cvtColor(img1, img1, cv::COLOR_GRAY2BGR);
@@ -525,6 +534,8 @@ void Cam::ShowContours(const Mat & img, vector<Point>& contour, const string &st
 	drawContours(img1, contours, -1, color, 8);
 
 	ShowPic(str, img1, 800);
+	string fp = "C:/Users/Copper/Desktop/江苏项目图像部分/实拍/";
+	if(str == "找到条码的精细轮廓") imwrite(fp+"精细轮廓.jpg", img1);
 }
 
 bool Cam::ReadBar(const Mat & img_roi, string & code)
@@ -652,6 +663,10 @@ void Cam::GetCenter(const Mat & img_roi, Point & pos, vector<Point> &accu_contou
 
 }
 
+void Cam::GetDir(const Mat & img_roi, const vector<Point>& contour, float & dir)
+{
+}
+
 bool Cam::LineCrop(const Mat & img, const vector<vector<Point>>& contours)
 {
 	Mat img1;
@@ -686,7 +701,7 @@ bool Cam::LineCrop(const Mat & img, const vector<vector<Point>>& contours)
 	return false;
 }
 
-bool Cam::ShowPic(string winName, const Mat & img, const int &time)
+bool Cam::ShowPic(string winName, const Mat & img, const int &time, const bool &close)
 {
 	if (!PIC_DISP_ON) return false;
 	try 
@@ -696,6 +711,7 @@ bool Cam::ShowPic(string winName, const Mat & img, const int &time)
 			pyrDown(tmp, tmp);
 		imshow(winName, tmp);
 		waitKey(time);
+		if (close) destroyWindow(winName);
 	}
 	catch (...)
 	{
